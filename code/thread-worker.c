@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <string.h>
+#include <ucontext.h>
 #include "thread-worker.h"
 #include "thread_worker_types.h"
 
@@ -20,8 +21,10 @@
 
 // INITIALIZE ALL YOUR OTHER VARIABLES HERE
 int init_scheduler_done = 0;
-int currentTID =0;
-
+int isMainThreadCreated =0;
+int currentTID =0; 
+tcb *schedTCB;
+tcb* currTCB;
 //node struct for queues
 typedef struct node {
 	struct node *next;
@@ -35,19 +38,18 @@ typedef struct queue {
 	int size;
 } queue;
 
-queue *ready_Q, *wait_Q, *run_Q;
+queue *wait_Q, *run_Q;
 
 //scheduler thread
-ucontext_t schedContext;
 
+void signal_handler(int signum){
+   swapcontext(currTCB->context, schedTCB->context);
+}
 
 // timer
 struct itimerval timer;
-void initSchedulerQsandSignal(){
+void initSchedulerQsandTimer(){
     //init Qs
-    ready_Q->head = NULL;
-    ready_Q->tail = NULL;
-    ready_Q->size =0;
     wait_Q->head = NULL;
     wait_Q->tail = NULL;
     wait_Q->size =0;
@@ -55,19 +57,30 @@ void initSchedulerQsandSignal(){
     run_Q->tail =NULL;
     run_Q->size =0;
 
-    //init scheduler
+    
+    //init schdeuler context
+    ucontext_t *schedContext = (ucontext_t*)malloc(sizeof(ucontext_t));
     void *stack=malloc(STACK_SIZE);
 
-    schedContext.uc_link=NULL;
-    schedContext.uc_stack.ss_sp=stack;
-    schedContext.uc_stack.ss_size=STACK_SIZE;
-    schedContext.uc_stack.ss_flags=0;
+    schedContext->uc_link=NULL;
+    schedContext->uc_stack.ss_sp=stack;
+    schedContext->uc_stack.ss_size=STACK_SIZE;
+    schedContext->uc_stack.ss_flags=0;
 
-    makecontext(&schedContext,(void *)&schedule,0);
-    //init signal. schedule() is the signal handler
+    makecontext(schedContext,(void *)&schedule,0);
+    
+    //init scheduler tcb
+    schedTCB = (tcb *) malloc(sizeof(tcb));
+    schedTCB->context = schedContext;
+    schedTCB->status = SCHED;
+    schedTCB->tid = currentTID;
+    schedTCB->retval =-1;
+    schedTCB->headOfJoiningQ = NULL;
+
+    //init timer signal. schedule() is the signal handler
     struct sigaction sa;
 	memset (&sa, 0, sizeof (sa));
-	sa.sa_handler = &schedule;
+	sa.sa_handler = &signal_handler;
 	sigaction(SIGPROF, &sa, NULL);
 }
 
@@ -93,47 +106,61 @@ int enqueue (queue *Q, tcb *thread) {
     return 0;
 }
 
+//FINISH
 tcb dequeue(queue *Q){
 
 }
 
-void initTimer(){
-    timer.it_interval.tv_usec = 0; 
-	timer.it_interval.tv_sec = QUANTUM;
-	timer.it_value.tv_usec = 0;
-	timer.it_value.tv_sec = QUANTUM;
+//FINISH
+*tcb searchQ(queue *Q, worker_t toFind){
+    
+}
+void armTimer(){
+    timer.it_interval.tv_usec = QUANTUM; 
+	timer.it_interval.tv_sec = 0;
+	timer.it_value.tv_usec = QUANTUM;
+	timer.it_value.tv_sec = 0;
     //start timer
-    setitimer(ITIMER_PROF, &timer, NULL);
+    //setitimer(ITIMER_PROF, &timer, NULL);
+}
+void disarmTimer(){
+    timer.it_interval.tv_usec = 0; 
+	timer.it_interval.tv_sec = 0;
+	timer.it_value.tv_usec = 0;
+	timer.it_value.tv_sec = 0;
+    //start timer
+    //setitimer(ITIMER_PROF, &timer, NULL);
 }
 /* create a new thread */
-int worker_create(worker_t *thread, pthread_attr_t *attr,
-void *(*function)(void *), void *arg)
+int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void *), void *arg)
 {
     //if first time calling woker_create
     if(init_scheduler_done ==0){
        
         
         //init scheduler thread, signal handler, + Qs
-        initSchedulerQsandSignal();
-        init_scheduler_done =1;
+        initSchedulerQsandTimer();
+        
 
-        //initialize caller/main thread
-        ucontext_t *callerContext = (ucontext_t*)malloc(sizeof(ucontext_t));
-        if (getcontext(callerContext) < 0){
+        //initialize main thread
+        ucontext_t *mainContext = (ucontext_t*)malloc(sizeof(ucontext_t));
+        if (getcontext(mainContext) < 0){
             perror("getcontext");
             exit(1);
         }
-        tcb *callerTCB = (tcb *) malloc(sizeof(tcb));
-        callerTCB->context = callerContext;
-        callerTCB->status = READY;
-        callerTCB->tid = currentTID++;
+        tcb *mainTCB = (tcb *) malloc(sizeof(tcb));
+        mainTCB->context = mainContext;
+        mainTCB->status = READY;
+        mainTCB->tid = currentTID++;
+        mainTCB->retval =-1;
+        mainTCB->headOfJoiningQ = NULL;
 
         //enqueue main thread
-        enqueue(run_Q, callerTCB);
+        enqueue(run_Q, mainTCB);
 
     }
-    // - create and initialize the context of this worker thread
-    // - allocate space of stack for this thread to run
+    // - create and initialize the context of new worker thread
+    
     ucontext_t *newThreadContext = (ucontext_t *) malloc(sizeof(ucontext_t));
     getcontext(newThreadContext);
 
@@ -142,36 +169,54 @@ void *(*function)(void *), void *arg)
 		perror("Failed to allocate stack");
 		exit(1);
 	}
+    // - allocate space of stack for this thread to run
 	newThreadContext->uc_stack.ss_size = STACK_SIZE;
 	newThreadContext->uc_link = NULL;
     newThreadContext->uc_stack.ss_flags = 0;
 		
     makecontext(newThreadContext, function, 1, arg);
 
-    // - create Thread Control Block (TCB)
+    // - create new Thread Control Block (TCB)
     tcb *newTCB = (tcb *) malloc(sizeof(tcb));
     newTCB->context = newThreadContext;
     newTCB->status = READY;
     newTCB->tid = currentTID;
-
-    //update tid for user
+    newTCB->retval =-1;
+    newTCB->headOfJoiningQ = NULL; 
+    //give tid to user
     *thread = currentTID++;
     
     // after everything is set, push this thread into run queue and
     // - make it ready for the execution.
     enqueue(run_Q, newTCB);
 
-    initTimer();
+    if(init_scheduler_done ==0){//only need to deliberately call scheduler the first time
+        init_scheduler_done =1;
+        scheduler();
+    }
+    // getcontext(*currContext); //save current context to caller/main thread
+    // *currContext = schedContext;
+    swapcontext(currTCB->context, schedTCB->context); //set currcontext to sched
 
     return 0;
 }
 
 /* give CPU possession to other user-level worker threads voluntarily */
+//FINISH
 int worker_yield()
 {
-    //dequeue current thread from runQ
-    //enqueueto ready Q
-    schedule(SIGPROF);
+    //stop timer
+    disarmTimer();
+    //move to tail of runQ
+
+    //swap context to scheduler
+        //problem: if i save context here, when it comes back, it will swap to the scheduler again?
+    swapcontext(currTCB->context, schedTCB->context);
+    
+
+    //swap to scheduler
+    
+
     return 0;
     // - change worker thread's state from Running to Ready
     // - save context of this thread to its thread control block
@@ -181,15 +226,26 @@ int worker_yield()
 /* terminate a thread */
 void worker_exit(void *value_ptr)
 {
+    disarmTimer();
     // - if value_ptr is provided, save return value
-    // - de-allocate any dynamic memory created when starting this thread (could be done here or elsewhere)
+    currTCB->retval = (int) value_ptr;
+
+    //make sure to check if any threads are waiting on the exitted thread
+        //if so move them to head
+        //else free this thread
+
 }
 
 /* Wait for thread termination */
 int worker_join(worker_t thread, void **value_ptr)
-{
-
+{//spinlock
     // - wait for a specific thread to terminate
+
+    //search for thread in runQ
+    //check if status is TERMINATED
+        //if so, save retval, remove it from Q, and free it
+        //if not, add caller thread to joiningQ. enter spinlock that continually checks for TERMINATED 
+
     // - if value_ptr is provided, retrieve return value from joining thread
     // - de-allocate any dynamic memory created by the joining thread
     return 0;
@@ -197,8 +253,7 @@ int worker_join(worker_t thread, void **value_ptr)
 };
 
 /* initialize the mutex lock */
-int worker_mutex_init(worker_mutex_t *mutex,
-                      const pthread_mutexattr_t *mutexattr)
+int worker_mutex_init(worker_mutex_t *mutex,const pthread_mutexattr_t *mutexattr)
 {
     //- initialize data structures for this mutex
     return 0;
@@ -237,12 +292,17 @@ int worker_mutex_destroy(worker_mutex_t *mutex)
 };
 
 /* scheduler */
-static void schedule(int signum)
+static void schedule()
 {
+
 //times when scheduler is called
     //timer interrupt
     //thread termination
     //thread yeild
+
+//dont need to set currTCB to scheduler.
+
+//never swapcontext. just setcontext.
 
 // - every time a timer interrupt occurs, your worker thread library
 // should be contexted switched from a thread context to this
