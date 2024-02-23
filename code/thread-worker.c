@@ -21,10 +21,10 @@
 
 // INITIALIZE ALL YOUR OTHER VARIABLES HERE
 int init_scheduler_done = 0;
-int isMainThreadCreated =0;
-int currentTID =0; 
-tcb *schedTCB;
-tcb* currTCB;
+//int isMainThreadCreated =0;
+int currentTID =0; //use as the tid of the next new thread
+tcb *schedTCB; //tcb of the scheduler
+node* currentThread; //node of the currently running thread
 //node struct for queues
 typedef struct node {
 	struct node *next;
@@ -43,7 +43,7 @@ queue *wait_Q, *run_Q;
 //scheduler thread
 
 void signal_handler(int signum){
-   swapcontext(currTCB->context, schedTCB->context);
+   swapcontext(currentThread->data->context, schedTCB->context);
 }
 
 // timer
@@ -85,21 +85,18 @@ void initSchedulerQsandTimer(){
 }
 
 //enqueue function
-int enqueue (queue *Q, tcb *thread) {
-    node *temp = (node *) malloc(sizeof(node));
-    temp->data = thread;
-    temp->next = NULL;
+int enqueue (queue *Q, node* thread) {
 
         //add to the tail of the queue
         if (Q->tail) {
             //enqueue behind tail
-            temp->next = Q->tail;
-            Q->tail = temp;
+            Q->tail->next = thread;
+            Q->tail = thread;
         }
         else{
             //empty Q
-            Q->head = temp;
-            Q->tail = temp;
+            Q->head = thread;
+            Q->tail = thread;
         }
     (Q->size)++;
 
@@ -107,14 +104,54 @@ int enqueue (queue *Q, tcb *thread) {
 }
 
 //FINISH
-tcb dequeue(queue *Q){
-
+node* dequeue(queue *Q){
+    //dequeue head
+    node* removed =NULL;
+    if (Q->head) {
+        removed =Q->head;
+        Q->head= Q->head->next; 
+        (Q->size)--;
+    }
+    return removed;
 }
 
-//FINISH
-*tcb searchQ(queue *Q, worker_t toFind){
+node* removeNode(queue *Q, worker_t toRemove){
+    if( Q->head->data->tid == (int) toRemove){ //if it's the head
+        Q->head= Q->head->next;
+        return ptr;
+    }
     
+    node* ptr = Q->head;
+    node* prev = ptr;
+
+    
+    while(ptr && (int) ptr->data->tid != (int) toRemove){
+        prev = ptr;
+        ptr = ptr->next;
+    }
+    if(ptr!=NULL){
+        if( Q->tail->data->tid == (int) toRemove){ //if it's the tail
+            prev->next =NULL;
+            Q->tail = prev;
+            return ptr;
+        }
+        prev->next = ptr->next;
+    }
+
+    return ptr;
 }
+//FINISH
+node* searchQ(queue *Q, worker_t toFind){
+    //dont remove from gueu
+    node* ptr = Q->head;
+
+    while(ptr && (int) ptr->data->tid != (int) toFind){
+        ptr = ptr->next;
+    }
+
+    return ptr;
+}
+
 void armTimer(){
     timer.it_interval.tv_usec = QUANTUM; 
 	timer.it_interval.tv_sec = 0;
@@ -143,11 +180,24 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         
 
         //initialize main thread
+        //init context
         ucontext_t *mainContext = (ucontext_t*)malloc(sizeof(ucontext_t));
         if (getcontext(mainContext) < 0){
             perror("getcontext");
             exit(1);
         }
+        mainContext->uc_stack.ss_sp = malloc(STACK_SIZE);
+        if (mainContext->uc_stack.ss_sp == NULL){
+            perror("Failed to allocate stack");
+            exit(1);
+        }
+        // - allocate space of stack for this thread to run
+        mainContext->uc_stack.ss_size = STACK_SIZE;
+        mainContext->uc_link = NULL;
+        mainContext->uc_stack.ss_flags = 0;
+            
+        makecontext(mainContext, function, 1, arg);
+        //init tcb
         tcb *mainTCB = (tcb *) malloc(sizeof(tcb));
         mainTCB->context = mainContext;
         mainTCB->status = READY;
@@ -155,8 +205,12 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         mainTCB->retval =-1;
         mainTCB->headOfJoiningQ = NULL;
 
+        //init queue node
+        node *main = (node *) malloc(sizeof(node));
+        main->data = mainTCB;
+        main->next = NULL;
         //enqueue main thread
-        enqueue(run_Q, mainTCB);
+        enqueue(run_Q, main);
 
     }
     // - create and initialize the context of new worker thread
@@ -183,12 +237,19 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     newTCB->tid = currentTID;
     newTCB->retval =-1;
     newTCB->headOfJoiningQ = NULL; 
-    //give tid to user
+    //give tid to caller
     *thread = currentTID++;
     
     // after everything is set, push this thread into run queue and
     // - make it ready for the execution.
-    enqueue(run_Q, newTCB);
+
+    //init new node
+    node *newThread = (node *) malloc(sizeof(node));
+    newThread->data = newTCB;
+    newThread->next = NULL;
+
+    //enqueue new thread
+    enqueue(run_Q, newThread);
 
     if(init_scheduler_done ==0){//only need to deliberately call scheduler the first time
         init_scheduler_done =1;
@@ -196,7 +257,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     }
     // getcontext(*currContext); //save current context to caller/main thread
     // *currContext = schedContext;
-    swapcontext(currTCB->context, schedTCB->context); //set currcontext to sched
+    swapcontext(currentThread->data->context, schedTCB->context); //set currcontext to sched
 
     return 0;
 }
@@ -208,14 +269,11 @@ int worker_yield()
     //stop timer
     disarmTimer();
     //move to tail of runQ
-
+    enqueue(run_Q, currentThread);
     //swap context to scheduler
         //problem: if i save context here, when it comes back, it will swap to the scheduler again?
-    swapcontext(currTCB->context, schedTCB->context);
-    
-
-    //swap to scheduler
-    
+        //nah we straight i believe
+    swapcontext(currentThread->data->context, schedTCB->context);
 
     return 0;
     // - change worker thread's state from Running to Ready
@@ -228,11 +286,23 @@ void worker_exit(void *value_ptr)
 {
     disarmTimer();
     // - if value_ptr is provided, save return value
-    currTCB->retval = (int) value_ptr;
+    
 
     //make sure to check if any threads are waiting on the exitted thread
-        //if so move them to head
-        //else free this thread
+         //if not free this thread
+         //else just return. they will eventually join.
+       
+    if(currentThread->data->headOfJoiningQ == NULL){
+        //free this thread
+        node* toFree = currentThread; //free toFree instead of currentThread so that currentThread is stilll usable after
+        currentThread = NULL;
+        toFree->data->retval = (int) value_ptr;
+        free(toFree->data->context);
+        free(toFree->data); //joiningQ is null so dont need to free it
+        free(toFree);
+    }
+    return;
+    //pop head of joiningQ
 
 }
 
@@ -301,6 +371,8 @@ static void schedule()
     //thread yeild
 
 //dont need to set currTCB to scheduler.
+
+//currentThread is NULL if a thread just exitted
 
 //never swapcontext. just setcontext.
 
