@@ -32,7 +32,7 @@ void worker_exit(void *value_ptr);
 int worker_join(worker_t thread, void **value_ptr);
 
 /* initial the mutex lock */
-int worker_mutex_init(worker_mutex_t *mutex, const pthread_mutexattr_t
+int worker_mutex_init(worker_mutex_t *mutex, const pthread_attr_t
 												 *mutexattr);
 
 /* aquire the mutex lock */

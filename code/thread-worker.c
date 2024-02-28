@@ -23,7 +23,7 @@
 int init_scheduler_done = 0;
 //int isMainThreadCreated =0;
 int currentTID =0; //use as the tid of the next new thread
-tcb *schedTCB; //tcb of the scheduler
+tcb *schedTCB; //tcb of the scheduler. scheduler doesnt have a node. tid is always -1.
 node* currentThread; //node of the currently running thread
 //node struct for queues
 typedef struct node {
@@ -38,6 +38,7 @@ typedef struct queue {
 	int size;
 } queue;
 
+//only need a runQ and maybe a waitQ, but maybe not.
 queue *wait_Q, *run_Q;
 
 //scheduler thread
@@ -73,8 +74,8 @@ void initSchedulerQsandTimer(){
     schedTCB = (tcb *) malloc(sizeof(tcb));
     schedTCB->context = schedContext;
     schedTCB->status = SCHED;
-    schedTCB->tid = currentTID;
-    schedTCB->retval =-1;
+    schedTCB->tid = -1;
+    schedTCB->retval = -1;
     schedTCB->headOfJoiningQ = NULL;
 
     //init timer signal. schedule() is the signal handler
@@ -116,12 +117,13 @@ node* dequeue(queue *Q){
 }
 
 node* removeNode(queue *Q, worker_t toRemove){
+    node* ptr = Q->head;
     if( Q->head->data->tid == (int) toRemove){ //if it's the head
         Q->head= Q->head->next;
         return ptr;
     }
     
-    node* ptr = Q->head;
+    
     node* prev = ptr;
 
     
@@ -174,15 +176,13 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     //if first time calling woker_create
     if(init_scheduler_done ==0){
        
-        
         //init scheduler thread, signal handler, + Qs
         initSchedulerQsandTimer();
         
-
         //initialize main thread
         //init context
         ucontext_t *mainContext = (ucontext_t*)malloc(sizeof(ucontext_t));
-        if (getcontext(mainContext) < 0){
+        if (getcontext(currentThread->data->context) < 0){//save current context to caller/main thread
             perror("getcontext");
             exit(1);
         }
@@ -211,6 +211,8 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         main->next = NULL;
         //enqueue main thread
         enqueue(run_Q, main);
+
+        currentThread = main;
 
     }
     // - create and initialize the context of new worker thread
@@ -251,14 +253,17 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     //enqueue new thread
     enqueue(run_Q, newThread);
 
-    if(init_scheduler_done ==0){//only need to deliberately call scheduler the first time
-        init_scheduler_done =1;
-        scheduler();
-    }
-    // getcontext(*currContext); //save current context to caller/main thread
+    // if(init_scheduler_done ==0){
+    //     scheduler();
+    // }
+    // getcontext(*currContext); 
     // *currContext = schedContext;
-    swapcontext(currentThread->data->context, schedTCB->context); //set currcontext to sched
 
+    
+    if(init_scheduler_done == 0){//only need to swap to scheduler the first time
+        init_scheduler_done =1;
+        swapcontext(currentThread->data->context, schedTCB->context); //save main context, swap to sched
+    }
     return 0;
 }
 
@@ -268,7 +273,7 @@ int worker_yield()
 {
     //stop timer
     disarmTimer();
-    //move to tail of runQ
+    //move to tail of runQ. right now it's dequeued from runQ
     enqueue(run_Q, currentThread);
     //swap context to scheduler
         //problem: if i save context here, when it comes back, it will swap to the scheduler again?
@@ -323,7 +328,7 @@ int worker_join(worker_t thread, void **value_ptr)
 };
 
 /* initialize the mutex lock */
-int worker_mutex_init(worker_mutex_t *mutex,const pthread_mutexattr_t *mutexattr)
+int worker_mutex_init(worker_mutex_t *mutex,const pthread_attr_t *mutexattr)
 {
     //- initialize data structures for this mutex
     return 0;
@@ -375,6 +380,7 @@ static void schedule()
 //currentThread is NULL if a thread just exitted
 
 //never swapcontext. just setcontext.
+
 
 // - every time a timer interrupt occurs, your worker thread library
 // should be contexted switched from a thread context to this
