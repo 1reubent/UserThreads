@@ -612,8 +612,8 @@ int worker_join(worker_t thread, void **value_ptr)
 
             child = removeNode(term_Q, thread); //remove child from termQ
         }else{
-            resumeTimer();
-            return -1; //thread does not currently exist
+            perror("attempt to join with nonexistent thread");
+            exit(1); //thread does not currently exist
         }
     }
 

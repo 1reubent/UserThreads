@@ -2,7 +2,6 @@
 #define MTX_TYPES_H
 
 #include "thread_worker_types.h"
-#include <sys/time.h>
 
 /* mutex struct definition */
 //node struct for queues
