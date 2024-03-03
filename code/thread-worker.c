@@ -58,24 +58,34 @@ void freeThread(node** toFree){
     //free node
     free((*toFree));
 }
+//returns ptr
+node* searchQ(queue *Q, worker_t toFind){
+    //dont remove from gueu
+    node* ptr = Q->head;
 
+    while(ptr!=NULL && (unsigned) ptr->data->tid != (unsigned) toFind){
+        ptr = ptr->next;
+    }
+
+    return ptr;
+}
 //enqueue function
-int enqueue (queue *Q, node* thread) {
-    if(searchQ(Q, thread)!=NULL){
+int enqueue (queue *Q, node* threadNode) {
+    if(searchQ(Q, threadNode->data->tid)!=NULL){
         perror("error");
         exit(1);
     }
-    thread->next = NULL;
+    threadNode->next = NULL;
     //add to the tail of the queue
     if (Q->tail != NULL) {
         //enqueue behind tail
-        Q->tail->next = thread;
-        Q->tail = thread;
+        Q->tail->next = threadNode;
+        Q->tail = threadNode;
     }
     else{
         //empty Q
-        Q->head = thread;
-        Q->tail = thread;
+        Q->head = threadNode;
+        Q->tail = threadNode;
     }
     (Q->size)++;
 
@@ -130,17 +140,6 @@ node* removeNode(queue *Q, worker_t toRemove){
         (Q->size)--;
     }
     
-    return ptr;
-}
-//returns ptr
-node* searchQ(queue *Q, worker_t toFind){
-    //dont remove from gueu
-    node* ptr = Q->head;
-
-    while(ptr!=NULL && (unsigned) ptr->data->tid != (unsigned) toFind){
-        ptr = ptr->next;
-    }
-
     return ptr;
 }
 
@@ -282,27 +281,27 @@ static void schedule()
     }else{
         mainThreadCreated++; //dont need to inc evey time FIX
     }
+    /*CANT DO THIS FOLLOWING PART*/
 
     //check if main just joined the last thread. means we needa pack up, wrap it up tidy up
-    if(run_Q->size ==1 && currentThread==NULL){ //one thread left, and last thread has exited so currentThread==NULL
-        //dont need to free structs used by scheduler or main? gets cleaned up after process exits
-            //https://piazza.com/class/lrdvzfbsfvu32w/post/51
-        //free main node and tcb.
-        //free schedule tcb.
-        //free queues
-            //CHECK if there are any nodes in termQ that haven't been joined (orphans)
-        if(term_Q->size !=0){
-            //free all nodes
-            node* toFree = dequeue(term_Q);
-            while(toFree!=NULL){}
+    // if(run_Q->size ==1 && currentThread==NULL){ //one thread left, and last thread has exited so currentThread==NULL
+    //     //dont need to free structs used by scheduler or main? gets cleaned up after process exits
+    //         //https://piazza.com/class/lrdvzfbsfvu32w/post/51
+    //     //free main node and tcb.
+    //     //free schedule tcb.
+    //     //free queues
+    //         //CHECK if there are any nodes in termQ that haven't been joined (orphans)
+    //     if(term_Q->size !=0){
+    //         //free all nodes
+    //         node* toFree = dequeue(term_Q);
+    //         while(toFree!=NULL){}
 
-        }
-        //free tiemr
-        
+    //     }
+    //     //free tiemr
+    //     //free mutQ if it's not yet empty
+    // }
 
-        //free mutQ if it's not yet empty
-        
-    }
+    /*CANT DO IT bc there's know way for scheduler to know if main might call join in the future*/
 
     // mutex/waitQs management?
     //TERMQ stuff
