@@ -1,6 +1,6 @@
 // File:	thread-worker.c
 
-// List all group member's name:
+// List all group member's name: omer sen
 /*
  */
 // username of iLab:
