@@ -1,7 +1,9 @@
 CC = gcc
-CFLAGS = -g -c
+CFLAGS = -g -c -fsanitize=address,undefined -Wall -Wvla -Werror   
+#-g -c
 AR = ar -rc
 RANLIB = ranlib
+SCHED = RR
 
 all: clean thread-worker.a
 
@@ -13,7 +15,7 @@ thread-worker.a: thread-worker.o
 thread-worker.o: thread-worker.h thread_worker_types.h mutex_types.h
 
 ifeq ($(SCHED), RR)
-	$(CC) $(CFLAGS) -DRR thread-worker.c
+	$(CC) $(CFLAGS) -DRR thread-worker.c 
 else ifeq ($(SCHED), MLFQ)
 	$(CC) $(CFLAGS) -DMLFQ thread-worker.c
 else

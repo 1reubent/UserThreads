@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "thread_worker_types.h": "c"
+        "thread_worker_types.h": "c",
+        "thread-worker.h": "c"
     }
 }

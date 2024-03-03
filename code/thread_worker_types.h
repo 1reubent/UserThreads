@@ -10,10 +10,7 @@ typedef unsigned int worker_t;
 #define WAITING 2
 #define TERMINATED 3
 
-typedef struct joinNode {
-	struct node *next;
-	worker_t *data;
-} joinNode; 
+
 
 typedef struct TCB
 {
@@ -24,9 +21,8 @@ typedef struct TCB
     int status;
     // thread context
     ucontext_t *context;
-    int retval;
-    //this will be a queue of all the threads waiting on this thread to exit. initialize to null
-    joinNode* headOfJoiningQ;
+    int retval; //always init to 0
+    worker_t *parent; //ptr to parent who will join. If NULL free thread. If not, wait for parent to run and join
 
     // thread stack
     // thread priority

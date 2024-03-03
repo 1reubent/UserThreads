@@ -56,9 +56,14 @@ int main(int argc, char **argv)
 	}
 
 	int **retvals = (int *)malloc(thread_num * sizeof(int *));
+	
+	/*ADDED THIS FORLOOP*/
+	for (i = 0; i < thread_num; i++)
+	{
+		(retvals)[i] = (int *) malloc(sizeof(int *));
+	}
 
 	worker_t *thread = (worker_t *)malloc(thread_num * sizeof(worker_t));
-
 	for (i = 0; i < thread_num; i++)
 	{
 		printf("Main thread creating worker thread %d\n", counter[i]);
@@ -88,6 +93,11 @@ int main(int argc, char **argv)
 
 	free(thread);
 	free(counter);
+	/*ADDED THIS FREE*/
+	for (i = 0; i < thread_num; i++)
+	{
+		free((retvals)[i]);
+	}
 	free(retvals);
 
 	printf("Main thread exit\n");

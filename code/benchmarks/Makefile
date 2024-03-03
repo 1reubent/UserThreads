@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -g -w
-
+CFLAGS = -g -w -fsanitize=address,undefined -Wall -Wvla -Werror   
+#-g -w
 all:: clean one_thread multiple_threads multiple_threads_yield multiple_threads_mutex multiple_threads_different_workload multiple_threads_with_return test
 
 one_thread:
