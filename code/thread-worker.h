@@ -1,6 +1,6 @@
 // File:	worker_t.h
 
-// List all group member's name:
+// List all group member's name: omer sen
 // username of iLab:
 // iLab Server:
 
