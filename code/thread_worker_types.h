@@ -22,7 +22,6 @@ typedef struct TCB
     // thread context
     ucontext_t *context;
     int retval; //always init to 0
-    worker_t *parent; //ptr to parent who will join. If NULL free thread. If not, wait for parent to run and join
 
     // thread stack
     // thread priority

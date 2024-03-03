@@ -18,6 +18,7 @@
 
 #define STACK_SIZE 16 * 1024
 #define QUANTUM 10 * 1000
+#define DEBUG
 
 
 // INITIALIZE ALL YOUR OTHER VARIABLES HERE
@@ -46,6 +47,13 @@ mutNode *headOfMutQ;
 
 
 void signal_handler(int signum){
+    #ifdef DEBUG
+        if(mainThreadCreated==-1){
+            printf("main thread waited\n");
+            mainThreadCreated=1;
+        }
+    #endif
+        
     swapcontext(currentThread->data->context, schedTCB->context);
 }
 
@@ -295,7 +303,6 @@ static void schedule()
     //         //free all nodes
     //         node* toFree = dequeue(term_Q);
     //         while(toFree!=NULL){}
-
     //     }
     //     //free tiemr
     //     //free mutQ if it's not yet empty
@@ -377,7 +384,6 @@ void initSchedulerQsandTimer(){
     schedTCB->status = SCHED;
     schedTCB->tid = 0;
     schedTCB->retval = 0;
-    schedTCB->parent = NULL;
 
 
     //init timer signal. schedule() is the signal handler
@@ -424,7 +430,6 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         mainTCB->status = READY;
         mainTCB->tid = currentTID++;
         mainTCB->retval =0;
-        mainTCB->parent = NULL;
 
         //init queue node
         node *main = (node *) malloc(sizeof(node));
@@ -476,7 +481,6 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     newTCB->status = READY;
     newTCB->tid = currentTID;
     newTCB->retval =0;
-    newTCB->parent = NULL;
     //give tid to caller
     *thread = currentTID++;
     
@@ -521,7 +525,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
 int worker_yield()
 {
     //stop timer
-    //pauseTimer();
+    pauseTimer();
     //move to tail of runQ. right now it's dequeued from runQ
     // enqueue(run_Q, currentThread);
     //swap context to scheduler
@@ -598,9 +602,12 @@ int worker_join(worker_t thread, void **value_ptr)
             child = searchMutQForThread(thread);
         }
         if( child != NULL){ //should never be null but just in case
-            child->data->parent = &(currentThread->data->tid);
             resumeTimer();
-            while(child->data->status != TERMINATED){} //spinlock until TERMINATED
+            while(child->data->status != TERMINATED){
+                #ifdef DEBUG
+                    mainThreadCreated =-1;
+                #endif
+            } //spinlock until TERMINATED
             pauseTimer();
 
             child = removeNode(term_Q, thread); //remove child from termQ
@@ -674,8 +681,9 @@ int worker_mutex_lock(worker_mutex_t *mutex)
     pauseTimer();
     //check if mutex exists AND that this thread doesn't already have the lock
     if(searchMutQ(mutex) != 0 && mutex->currentUser!= NULL && mutex->currentUser->data->tid != currentThread->data->tid){
-        resumeTimer();
-        return -1;
+        //resumeTimer();
+        perror("invalid mutex lock");
+        exit(1);
     }
     if(__sync_lock_test_and_set(&(mutex->mut), 1) ==0){
         //we got the lock
@@ -685,17 +693,26 @@ int worker_mutex_lock(worker_mutex_t *mutex)
     }
     //we dont got the lock
     //push currentThread to waitQ
-    enqueue(mutex->wait_Q, currentThread);
-    currentThread->data->status = WAITING;
-    //new ptr to currentThread bc currentThread will be NULL
     node* thisThread = currentThread;
-    currentThread = NULL;
-    //swap and wait till it's your turn with the mutex
-    swapcontext(thisThread->data->context, schedTCB->context);
+    do{
+        thisThread = currentThread;
+        enqueue(mutex->wait_Q, currentThread);
+        currentThread->data->status = WAITING;
+        //new ptr to currentThread bc currentThread will be NULL
+        
+        currentThread = NULL;
+        //swap and wait till it's your turn with the mutex
+        swapcontext(thisThread->data->context, schedTCB->context);
+
+        //thread comes back here
+        pauseTimer();
+    }while(__sync_lock_test_and_set(&(mutex->mut), 1) !=0); //if you come back and someone took the lock again, go back in waitQ
     
-    //at this point, thread has the mutex AND scheduler has already begun timer.
+    //at this point, thread has the mutex
+
     mutex->currentUser = thisThread;
     currentThread->data->status = READY;
+    resumeTimer();
     return 0;
 
 };
@@ -710,8 +727,9 @@ int worker_mutex_unlock(worker_mutex_t *mutex)
     pauseTimer();
     //check if mutex exists AND that this thread actually holds the lock
     if(searchMutQ(mutex) != 0 && mutex->currentUser!= NULL && mutex->currentUser->data->tid == currentThread->data->tid){
-        resumeTimer();
-        return -1;
+        //resumeTimer();
+        perror("invalid mutex unlock");
+        exit(1);
     }
     __sync_lock_release(&(mutex->mut)); //release mutex
     mutex->currentUser=NULL;
@@ -734,12 +752,13 @@ int worker_mutex_destroy(worker_mutex_t *mutex)
     pauseTimer();
     //check if mutex exists
     if(searchMutQ(mutex) != 0){
-        resumeTimer();
-        return -1;
+        //resumeTimer();
+        perror("invalid mutex destroy");
+        exit(1);
     }
     if(mutex->currentUser!=NULL ||mutex->wait_Q->size !=0 ){
-        resumeTimer();
-        return -1;
+        perror("attempt to destroy an occupied or requested mutex");
+        exit(1);
     }
 
     free(mutex->wait_Q);

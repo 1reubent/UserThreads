@@ -12,7 +12,7 @@ void dummy_work(void *arg)
 
 	for (i = 0; i < 20; i++)
 	{
-		for (j = 0; j < 40000000; j++)
+		for (j = 0; j < 10000000; j++)
 		{
 		}
 		printf("Thread %d running\n", n);
