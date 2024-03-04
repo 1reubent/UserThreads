@@ -80,7 +80,7 @@ node* searchQ(queue *Q, worker_t toFind){
 //enqueue function
 int enqueue (queue *Q, node* threadNode) {
     if(searchQ(Q, threadNode->data->tid)!=NULL){
-        perror("error");
+        perror("error\n");
         exit(1);
     }
     threadNode->next = NULL;
@@ -246,7 +246,7 @@ static void sched_rr()
     //dequeue head of runQ
     currentThread = dequeue(run_Q);
     if(currentThread == NULL){
-        perror("error");
+        perror("error\n");
         exit(1);
     }
     //set timer
@@ -338,7 +338,7 @@ void initSchedulerQsandTimer(){
     //init Qs
     term_Q = (queue*) malloc(sizeof(queue));
     if (term_Q == NULL){
-		perror("Failed to allocate term_Q");
+		perror("Failed to allocate term_Q\n");
 		exit(1);
 	}
     term_Q->head = NULL;
@@ -347,7 +347,7 @@ void initSchedulerQsandTimer(){
 
     run_Q = (queue*) malloc(sizeof(queue));
     if (run_Q == NULL){
-		perror("Failed to allocate run_Q");
+		perror("Failed to allocate run_Q\n");
 		exit(1);
 	}
     run_Q->head = NULL;
@@ -360,7 +360,7 @@ void initSchedulerQsandTimer(){
     //init schdeuler context
     ucontext_t *schedContext = (ucontext_t*) malloc(sizeof(ucontext_t));
     if (schedContext == NULL){
-		perror("Failed to allocate schedContext");
+		perror("Failed to allocate schedContext\n");
 		exit(1);
 	}
     if (getcontext(schedContext) < 0){
@@ -369,7 +369,7 @@ void initSchedulerQsandTimer(){
 	}
     void *stack=malloc(STACK_SIZE);
     if (stack == NULL){
-		perror("Failed to allocate stack");
+		perror("Failed to allocate stack\n");
 		exit(1);
 	}
     schedContext->uc_link=NULL;
@@ -382,7 +382,7 @@ void initSchedulerQsandTimer(){
     //init scheduler tcb
     schedTCB = (tcb *) malloc(sizeof(tcb));
     if (schedTCB == NULL){
-		perror("Failed to allocate schedTCB");
+		perror("Failed to allocate schedTCB\n");
 		exit(1);
 	}
     schedTCB->context = schedContext;
@@ -412,7 +412,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         //init context
         ucontext_t *mainContext = (ucontext_t*) malloc(sizeof(ucontext_t));
         if (mainContext == NULL){
-		    perror("Failed to allocate mainContext");
+		    perror("Failed to allocate mainContext\n");
 		    exit(1);
 	    }
         //mainContext->uc_stack.ss_sp = (void*) malloc(STACK_SIZE);
@@ -428,7 +428,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         //init tcb
         tcb *mainTCB = (tcb *) malloc(sizeof(tcb));
         if (mainTCB == NULL){
-		    perror("Failed to allocate mainTCB");
+		    perror("Failed to allocate mainTCB\n");
 		    exit(1);
 	    }
         mainTCB->context = mainContext;
@@ -439,7 +439,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
         //init queue node
         node *main = (node *) malloc(sizeof(node));
         if (main == NULL){
-		    perror("Failed to allocate main");
+		    perror("Failed to allocate main\n");
 		    exit(1);
 	    }
         main->data = mainTCB;
@@ -456,17 +456,17 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     
     ucontext_t *newThreadContext = (ucontext_t *) malloc(sizeof(ucontext_t));
     if (newThreadContext == NULL){
-        perror("Failed to allocate newThreadContext");
+        perror("Failed to allocate newThreadContext\n");
         exit(1);
     }
     if (getcontext(newThreadContext) < 0){
-		perror("getcontext");
+		perror("getcontext\n");
 		exit(1);
 	}
 
     newThreadContext->uc_stack.ss_sp = (void *) malloc(STACK_SIZE);
     if (newThreadContext->uc_stack.ss_sp == NULL){
-		perror("Failed to allocate stack");
+		perror("Failed to allocate stack\n");
 		exit(1);
 	}
     // - allocate space of stack for this thread to run
@@ -479,7 +479,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     // - create new Thread Control Block (TCB)
     tcb *newTCB = (tcb *) malloc(sizeof(tcb));
     if (newTCB == NULL){
-        perror("Failed to allocate newTCB");
+        perror("Failed to allocate newTCB\n");
         exit(1);
     }
     newTCB->context = newThreadContext;
@@ -495,7 +495,7 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     //init new node
     node *newThread = (node *) malloc(sizeof(node));
     if (newThread == NULL){
-        perror("Failed to allocate newThread");
+        perror("Failed to allocate newThread\n");
         exit(1);
     }
     newThread->data = newTCB;
@@ -617,7 +617,7 @@ int worker_join(worker_t thread, void **value_ptr)
 
             child = removeNode(term_Q, thread); //remove child from termQ
         }else{
-            perror("attempt to join with nonexistent thread");
+            perror("attempt to join with nonexistent thread\n");
             exit(1); //thread does not currently exist
         }
     }
@@ -653,7 +653,7 @@ int worker_mutex_init(worker_mutex_t *mutex,const pthread_attr_t *mutexattr)
     mutex->currentUser =NULL;
     mutex->wait_Q = (queue*) malloc(sizeof(queue));
     if (mutex->wait_Q == NULL){
-        perror("Failed to allocate mutex->wait_Q");
+        perror("Failed to allocate mutex->wait_Q\n");
         exit(1);
     }
     mutex->wait_Q->head =NULL;
@@ -663,7 +663,7 @@ int worker_mutex_init(worker_mutex_t *mutex,const pthread_attr_t *mutexattr)
 
     mutNode* newMutex = malloc(sizeof(mutNode));
     if (newMutex == NULL){
-        perror("Failed to allocate newMutex");
+        perror("Failed to allocate newMutex\n");
         exit(1);
     }
     newMutex->mut = mutex;
@@ -685,9 +685,9 @@ int worker_mutex_lock(worker_mutex_t *mutex)
         //
     pauseTimer();
     //check if mutex exists AND that this thread doesn't already have the lock
-    if(searchMutQ(mutex) != 0 && mutex->currentUser!= NULL && mutex->currentUser->data->tid != currentThread->data->tid){
+    if(searchMutQ(mutex) != 0 || (mutex->currentUser!= NULL && mutex->currentUser->data->tid == currentThread->data->tid)){
         //resumeTimer();
-        perror("invalid mutex lock");
+        perror("invalid mutex lock\n");
         exit(1);
     }
     if(__sync_lock_test_and_set(&(mutex->mut), 1) ==0){
@@ -731,9 +731,9 @@ int worker_mutex_unlock(worker_mutex_t *mutex)
         
     pauseTimer();
     //check if mutex exists AND that this thread actually holds the lock
-    if(searchMutQ(mutex) != 0 && mutex->currentUser!= NULL && mutex->currentUser->data->tid == currentThread->data->tid){
+    if(searchMutQ(mutex) != 0 || mutex->currentUser== NULL || mutex->currentUser->data->tid != currentThread->data->tid){
         //resumeTimer();
-        perror("invalid mutex unlock");
+        perror("invalid mutex unlock\n");
         exit(1);
     }
     __sync_lock_release(&(mutex->mut)); //release mutex
@@ -759,7 +759,7 @@ int worker_mutex_destroy(worker_mutex_t *mutex)
     //check if mutex exists
     if(searchMutQ(mutex) != 0){
         //resumeTimer();
-        perror("invalid mutex destroy");
+        perror("invalid mutex destroy\n");
         exit(1);
     }
     if(mutex->currentUser!=NULL ||mutex->wait_Q->size !=0 ){
