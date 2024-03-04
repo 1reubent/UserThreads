@@ -23,7 +23,7 @@
 
 // INITIALIZE ALL YOUR OTHER VARIABLES HERE
 int init_scheduler_done = 0;
-int mainThreadCreated = 0;
+int mainThreadWaiting = 0;
 struct itimerval timer;
 struct itimerval tempTimer; //for holding the timer state during pauseTimer()
 
@@ -48,9 +48,9 @@ mutNode *headOfMutQ;
 
 void signal_handler(int signum){
     #ifdef DEBUG
-        if(mainThreadCreated==-1){
-            printf("main thread waited\n");
-            mainThreadCreated=1;
+        if(mainThreadWaiting==-1){
+            printf("MAIN THREAD WAITED.MAIN THREAD WAITED.MAIN THREAD WAITED\n");
+            mainThreadWaiting=1;
         }
     #endif
         
@@ -288,11 +288,11 @@ static void schedule()
     //     freeThread(&toFree);
     //     toFreeAfterExit = NULL;
     // }
-    //enqueue current thread, as long as its not NULL or the
-    if(currentThread!=NULL && mainThreadCreated!=0){
+    //enqueue current thread, as long as its not NULL or the first time calling scheduler bc main is alreaady enqueued then
+    if(currentThread!=NULL && init_scheduler_done!=0){
         enqueue(run_Q, currentThread);
     }else{
-        mainThreadCreated++; //dont need to inc evey time FIX
+        init_scheduler_done=1; 
     }
     /*CANT DO THIS FOLLOWING PART*/
 
@@ -512,7 +512,6 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
 
     
     if(init_scheduler_done == 0){//only need to swap to scheduler the first time
-        init_scheduler_done =1;
 
         //enqueue main thread
         //enqueue(run_Q, currentThread); //enqueue it after the new thread, so it has a higher chance of joining it after
@@ -610,7 +609,7 @@ int worker_join(worker_t thread, void **value_ptr)
             resumeTimer();
             while(child->data->status != TERMINATED){
                 #ifdef DEBUG
-                    mainThreadCreated =-1;
+                    mainThreadWaiting =-1;
                 #endif
             } //spinlock until TERMINATED
             pauseTimer();
@@ -713,10 +712,10 @@ int worker_mutex_lock(worker_mutex_t *mutex)
         pauseTimer();
     }while(__sync_lock_test_and_set(&(mutex->mut), 1) !=0); //if you come back and someone took the lock again, go back in waitQ
     
-    //at this point, thread has the mutex
+    //at this point, thread has the mutex AND is in READY state
 
     mutex->currentUser = thisThread;
-    currentThread->data->status = READY; //DOESNT HAVE TO BE HERE bc if thread is runing, its alrady in ready state by unlock
+    //currentThread->data->status = READY; //DOESNT HAVE TO BE HERE bc if thread is runing, its alrady in ready state by unlock
     resumeTimer();
     return 0;
 
