@@ -1,10 +1,10 @@
 // File:	thread-worker.c
 
-// List all group member's name: omer sen
+// List all group member's name: omer sen (netID: os226) , reuben thomas (netID: rmt135)
 /*
  */
-// username of iLab:
-// iLab Server:
+// username of iLab: 
+// iLab Server:cpp.cs.rugters.edu
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -159,7 +159,7 @@ int pushMut(mutNode* toPush){ //push mutNode into mutQ
 
 mutNode* removeMut(worker_mutex_t *mutex){ //remove mutNode from mutQueue
     mutNode* ptr = headOfMutQ;
-    if(ptr == NULL){
+    if(ptr == NULL || mutex==NULL){
         return NULL;
     }
 
@@ -199,6 +199,10 @@ node* searchMutQForThread(worker_t thread){ //search mutQ for specific thread in
 }
 
 int searchMutQ(worker_mutex_t* mutex){
+    if(mutex==NULL){
+        return -1;
+    }
+
     mutNode* ptr = headOfMutQ;
     while(ptr!=NULL && ptr->mut->mid != mutex->mid){ // search for mutex in mutQ
         ptr = ptr->next;
@@ -242,7 +246,8 @@ static void sched_rr()
     //dequeue head of runQ
     currentThread = dequeue(run_Q);
     if(currentThread == NULL){
-        printf("???");
+        perror("error");
+        exit(1);
     }
     //set timer
     restartTimer();
@@ -711,7 +716,7 @@ int worker_mutex_lock(worker_mutex_t *mutex)
     //at this point, thread has the mutex
 
     mutex->currentUser = thisThread;
-    currentThread->data->status = READY;
+    currentThread->data->status = READY; //DOESNT HAVE TO BE HERE bc if thread is runing, its alrady in ready state by unlock
     resumeTimer();
     return 0;
 
@@ -737,7 +742,8 @@ int worker_mutex_unlock(worker_mutex_t *mutex)
     node* nextUp = dequeue(mutex->wait_Q);
     if(nextUp!=NULL){
         //somebody wants mutex
-       enqueue(run_Q, nextUp);
+        currentThread->data->status = READY;
+        enqueue(run_Q, nextUp);
     }
 
     resumeTimer();
@@ -757,7 +763,7 @@ int worker_mutex_destroy(worker_mutex_t *mutex)
         exit(1);
     }
     if(mutex->currentUser!=NULL ||mutex->wait_Q->size !=0 ){
-        perror("attempt to destroy an occupied or requested mutex");
+        perror("attempt to destroy an occupied or requested mutex\n");
         exit(1);
     }
 
