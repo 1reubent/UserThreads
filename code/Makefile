@@ -1,6 +1,7 @@
 CC = gcc
-CFLAGS = -g -c -fsanitize=address,undefined -Wall -Wvla -Werror   
-#-g -c
+CFLAGS = -g -c 
+#-fsanitize=address,undefined -Wall -Wvla -Werror   
+
 AR = ar -rc
 RANLIB = ranlib
 SCHED = RR

@@ -18,7 +18,7 @@
 
 #define STACK_SIZE 16 * 1024
 #define QUANTUM 10 * 1000
-#define DEBUG
+//#define DEBUG
 
 
 // INITIALIZE ALL YOUR OTHER VARIABLES HERE
@@ -69,6 +69,10 @@ void freeThread(node** toFree){
 //returns ptr
 node* searchQ(queue *Q, worker_t toFind){
     //dont remove from gueu
+    if(Q ==NULL){
+        perror("error. Q is NULL in searchQ() \n");
+        exit(1);
+    }
     node* ptr = Q->head;
 
     while(ptr!=NULL && (unsigned) ptr->data->tid != (unsigned) toFind){
@@ -80,7 +84,7 @@ node* searchQ(queue *Q, worker_t toFind){
 //enqueue function
 int enqueue (queue *Q, node* threadNode) {
     if(searchQ(Q, threadNode->data->tid)!=NULL){
-        perror("error\n");
+        perror("error. enqueue-ing thread twice in a queue. \n");
         exit(1);
     }
     threadNode->next = NULL;
@@ -103,6 +107,10 @@ int enqueue (queue *Q, node* threadNode) {
 //FINISH
 node* dequeue(queue *Q){
     //dequeue head
+    if(Q ==NULL){
+        perror("error. Q is NULL in dequeue() \n");
+        exit(1);
+    }
     node* removed =NULL;
     if (Q->size >= 1) {
         removed =Q->head;
@@ -118,6 +126,10 @@ node* dequeue(queue *Q){
 }
 
 node* removeNode(queue *Q, worker_t toRemove){
+    if(Q ==NULL){
+        perror("error. Q is NULL in removeNode() \n");
+        exit(1);
+    }
     node* ptr = Q->head;
     if(ptr == NULL){
         return NULL;
@@ -645,7 +657,10 @@ int worker_mutex_init(worker_mutex_t *mutex,const pthread_attr_t *mutexattr)
 {
     pauseTimer();
     //- initialize data structures for this mutex
-
+    if(mutex == NULL){
+        perror("mutex is NULL\n");
+        exit(1);
+    }
     //memory for mutex already allocated
     mutex->mut = 0; 
     mutex->mid = currentMID++;
