@@ -1,6 +1,6 @@
 // File:	worker_t.h
 
-// List all group member's name: omer sen (netID: os226), reuben thomas (netID: os226)
+// List all group member's name: omer sen (netID: os226), reuben thomas (netID: rmt135)
 // username of iLab: 
 // iLab Server: cpp.cs.rugters.edu
 
