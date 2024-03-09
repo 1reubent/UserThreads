@@ -31,10 +31,8 @@ struct itimerval tempTimer; //for holding the timer state during pauseTimer()
 int currentTID =1; //use as the tid of the next new thread. continually increment
 tcb *schedTCB; //tcb of the scheduler. scheduler doesnt have a node. tid is always 0.
 node* currentThread; //node of the currently running thread
-//node* toFreeAfterExit; //if a thread calls exit AND has no parent, it needs to be freed by scheduler
 int currentMID =0; //ids for current mutexes
 
-//only need a runQ and maybe a waitQ, but maybe not.
 queue *term_Q, *run_Q; //run Q and terminated Q
 
 typedef struct mutNode {// Q of mutexes. functions like a stack, push and pop at the head.
@@ -58,7 +56,7 @@ void signal_handler(int signum){
 }
 
 void freeThread(node** toFree){
-    free((*toFree)->data->context->uc_stack.ss_sp); //main thread has no malloc'd stack tho?
+    free((*toFree)->data->context->uc_stack.ss_sp);
     //free context
     free((*toFree)->data->context);
     //free tcb
@@ -68,7 +66,6 @@ void freeThread(node** toFree){
 }
 //returns ptr
 node* searchQ(queue *Q, worker_t toFind){
-    //dont remove from gueu
     if(Q ==NULL){
         perror("error. Q is NULL in searchQ() \n");
         exit(1);
@@ -104,7 +101,6 @@ int enqueue (queue *Q, node* threadNode) {
     return 0;
 }
 
-//FINISH
 node* dequeue(queue *Q){
     //dequeue head
     if(Q ==NULL){
@@ -231,9 +227,7 @@ void restartTimer(){ //reset timer to QUANTUM
     setitimer(ITIMER_PROF, &timer, NULL);
 }
 void pauseTimer(){
-    //save rmaining time in case it's needed later
-    //getitimer(ITIMER_PROF, &tempTimer);
-
+    //save remaining time in case it's needed later
     timer.it_interval.tv_usec = 0; 
 	timer.it_interval.tv_sec = 0;
 	timer.it_value.tv_usec = 0;
@@ -267,72 +261,21 @@ static void sched_rr()
     setcontext(currentThread->data->context);
 }
 
-/* Preemptive MLFQ scheduling algorithm */
-// static void sched_mlfq()
-// {
-//     // - your own implementation of MLFQ
-//     // (feel free to modify arguments and return types)
-//     return;
-
-// }
 /* scheduler */
-//FIX: dont need to inc mainThreadCreated every time
-//FIX: need to free main, queues etc.
+
 static void schedule()
 {
-// - every time a timer interrupt occurs, your worker thread library
-// should be contexted switched from a thread context to this
-// schedule() function
 
-//times when scheduler is called
-    //first worker create, current thread is main. do not enqueue
-    //timer interrupt, currentThread is normal. enqueue
-    //thread termination (exit), currentThread is NULL. do not enqueue
-    //thread yeild, currentThread is normal. do not enqueue
-
-//never swapcontext. just setcontext.
 
     pauseTimer();
     
-    //free oprhaned thread if there is one
-    // if(toFreeAfterExit!=NULL){
-    //     node* toFree = toFreeAfterExit;
-    //     freeThread(&toFree);
-    //     toFreeAfterExit = NULL;
-    // }
     //enqueue current thread, as long as its not NULL or the first time calling scheduler bc main is alreaady enqueued then
     if(currentThread!=NULL && init_scheduler_done!=0){
         enqueue(run_Q, currentThread);
     }else{
         init_scheduler_done=1; 
     }
-    /*CANT DO THIS FOLLOWING PART*/
-
-    //check if main just joined the last thread. means we needa pack up, wrap it up tidy up
-    // if(run_Q->size ==1 && currentThread==NULL){ //one thread left, and last thread has exited so currentThread==NULL
-    //     //dont need to free structs used by scheduler or main? gets cleaned up after process exits
-    //         //https://piazza.com/class/lrdvzfbsfvu32w/post/51
-    //     //free main node and tcb.
-    //     //free schedule tcb.
-    //     //free queues
-    //         //CHECK if there are any nodes in termQ that haven't been joined (orphans)
-    //     if(term_Q->size !=0){
-    //         //free all nodes
-    //         node* toFree = dequeue(term_Q);
-    //         while(toFree!=NULL){}
-    //     }
-    //     //free tiemr
-    //     //free mutQ if it's not yet empty
-    // }
-
-    /*CANT DO IT bc there's know way for scheduler to know if main might call join in the future*/
-
-    // mutex/waitQs management?
-    //TERMQ stuff
-
-    //if this is the last thread, need to free main thread, timer struct and queues
-
-    // - invoke scheduling algorithms according to the policy (RR or MLFQ)
+        // - invoke scheduling algorithms according to the policy (RR or MLFQ)
 
     // - schedule policy
     #ifndef MLFQ
@@ -344,7 +287,6 @@ static void schedule()
         
     #endif
 }
-// timer
 
 void initSchedulerQsandTimer(){
     //init Qs
@@ -365,9 +307,6 @@ void initSchedulerQsandTimer(){
     run_Q->head = NULL;
     run_Q->tail =NULL;
     run_Q->size =0;
-
-    
-    // toFreeAfterExit = NULL;
 
     //init schdeuler context
     ucontext_t *schedContext = (ucontext_t*) malloc(sizeof(ucontext_t));
@@ -403,14 +342,14 @@ void initSchedulerQsandTimer(){
     schedTCB->retval = 0;
 
 
-    //init timer signal. schedule() is the signal handler
+    //init timer signal.
     struct sigaction sa;
 	memset (&sa, 0, sizeof (sa));
 	sa.sa_handler = &signal_handler;
 	sigaction(SIGPROF, &sa, NULL);
 }
 
-//FIX: do not need a "parent" field in the tcb. every thread goes to termQ anyway and is freed by scheduler if not join/parent
+
 /* create a new thread */
 int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void *), void *arg)
 {
@@ -427,16 +366,6 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
 		    perror("Failed to allocate mainContext\n");
 		    exit(1);
 	    }
-        //mainContext->uc_stack.ss_sp = (void*) malloc(STACK_SIZE);
-        // if (getcontext(mainContext) < 0){
-        //     perror("getcontext");
-		//     exit(1);
-        // }
-        // - allocate space of stack for this thread to run
-        // mainContext->uc_stack.ss_size = STACK_SIZE;
-        // mainContext->uc_link = NULL;
-        // mainContext->uc_stack.ss_flags = 0;
-            
         //init tcb
         tcb *mainTCB = (tcb *) malloc(sizeof(tcb));
         if (mainTCB == NULL){
@@ -516,20 +445,10 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
     //enqueue new thread
     enqueue(run_Q, newThread);
 
-    // if(init_scheduler_done ==0){
-    //     scheduler();
-    // }
-    // getcontext(*currContext); 
-    // *currContext = schedContext;
-
     
     if(init_scheduler_done == 0){//only need to swap to scheduler the first time
 
-        //enqueue main thread
-        //enqueue(run_Q, currentThread); //enqueue it after the new thread, so it has a higher chance of joining it after
-
         swapcontext(currentThread->data->context, schedTCB->context); //save main context, swap to sched
-        //setcontext(schedTCB->context);
     }else{
         resumeTimer();
     }
@@ -537,45 +456,21 @@ int worker_create(worker_t *thread, pthread_attr_t *attr, void *(*function)(void
 }
 
 /* give CPU possession to other user-level worker threads voluntarily */
-//FINISH
 int worker_yield()
 {
     //stop timer
     pauseTimer();
-    //move to tail of runQ. right now it's dequeued from runQ
-    // enqueue(run_Q, currentThread);
-    //swap context to scheduler
-        //problem: if i save context here, when it comes back, it will swap to the scheduler again?
-        //nah we straight i believe
     swapcontext(currentThread->data->context, schedTCB->context);
 
     return 0;
-    // - change worker thread's state from Running to Ready
-    // - save context of this thread to its thread control block
-    // - switch from thread context to scheduler context
 }
 
 
 /* terminate a thread */
-//FIX: FREETHREAD IS NOT WORKING
 void worker_exit(void *value_ptr) //assuming every thread will eventually call this??
 {
     pauseTimer();
-    // - if value_ptr is provided, save return value
-
-    //make sure to check if any threads are waiting on the exitted thread
-         //if not free this thread
-         //else just return. they will eventually join.
     
-    /*
-    THIS USED TO BE IN AN IF STATEMENT::
-    */
-
-    // if(currentThread->data->parent == NULL){
-    //     //toFreeAfterExit = currentThread; //remove currentThread from runQ
-    // }
-    // else ::
-
     //put value_ptr in tcb for parent
     if(value_ptr != NULL){
         currentThread->data->retval = *( (int*)value_ptr );
@@ -583,31 +478,14 @@ void worker_exit(void *value_ptr) //assuming every thread will eventually call t
     //set status to TERMINATED
     currentThread->data->status = TERMINATED;
     enqueue(term_Q, currentThread);
-
-    /*
-    END OF USED-TO-BE IF STATEMENT
-    */
     
     currentThread = NULL;
     setcontext(schedTCB->context); //swap to scheduler
 }
 
 /* Wait for thread termination */
-//SHOULD CHECK TERMQ FOR THREAD
-//FIX: freethread isnt working
-//FIX: should probably swap to scheduler, and check if this is the last thread to join (just main left). need to free
 int worker_join(worker_t thread, void **value_ptr)
-{//spinlock
-    // - wait for a specific thread to terminate
-
-    //search for thread in runQ
-    //check if status is TERMINATED
-        //if so, save retval, remove it from Q, and free it
-        //if not, add caller thread to thatthread->parent. enter spinlock that continually checks for TERMINATED 
-    //IF thread is NOT found. then just return a 0 value_ptr. it means the thread is long gone.
-
-    // - if value_ptr is provided, retrieve return value from joining thread
-    // - de-allocate any dynamic memory created by the joining thread
+{
     pauseTimer();
 
     node* child = removeNode(term_Q, thread); //returns NULL if not in Q
@@ -617,7 +495,7 @@ int worker_join(worker_t thread, void **value_ptr)
         if(child==NULL){ //if null, search mutex waitQs
             child = searchMutQForThread(thread);
         }
-        if( child != NULL){ //should never be null but just in case
+        if( child != NULL){ 
             resumeTimer();
             while(child->data->status != TERMINATED){
                 #ifdef DEBUG
@@ -638,10 +516,6 @@ int worker_join(worker_t thread, void **value_ptr)
     if(value_ptr !=NULL){
          **( (int**) value_ptr) =child->data->retval;
     }
-    
-    //int** ret_ptr = (int**) value_ptr;
-    //int* ret_val = malloc(sizeof(int));
-    //*ret_val = child->data->retval;
     
     //free thread
     freeThread(&child);
@@ -692,11 +566,6 @@ int worker_mutex_init(worker_mutex_t *mutex,const pthread_attr_t *mutexattr)
 /* aquire the mutex lock */
 int worker_mutex_lock(worker_mutex_t *mutex)
 {
-    // - use the built-in test-and-set atomic function to test the mutex
-    // - if the mutex is acquired successfully, enter the critical section
-    // - if acquiring mutex fails, push current thread into block list and
-    // context switch to the scheduler thread
-        //
     pauseTimer();
     //check if mutex exists AND that this thread doesn't already have the lock
     if(searchMutQ(mutex) != 0 || (mutex->currentUser!= NULL && mutex->currentUser->data->tid == currentThread->data->tid)){
@@ -730,7 +599,6 @@ int worker_mutex_lock(worker_mutex_t *mutex)
     //at this point, thread has the mutex AND is in READY state
 
     mutex->currentUser = thisThread;
-    //currentThread->data->status = READY; //DOESNT HAVE TO BE HERE bc if thread is runing, its alrady in ready state by unlock
     resumeTimer();
     return 0;
 
@@ -739,9 +607,6 @@ int worker_mutex_lock(worker_mutex_t *mutex)
 /* release the mutex lock */
 int worker_mutex_unlock(worker_mutex_t *mutex)
 {
-    // - release mutex and make it available again.
-    // - put one or more threads in block list to run queue
-    // so that they could compete for mutex later.
         
     pauseTimer();
     //check if mutex exists AND that this thread actually holds the lock
@@ -767,8 +632,6 @@ int worker_mutex_unlock(worker_mutex_t *mutex)
 /* destroy the mutex */
 int worker_mutex_destroy(worker_mutex_t *mutex)
 {
-    // - make sure mutex is not being used
-    // - de-allocate dynamic memory created in worker_mutex_init
     pauseTimer();
     //check if mutex exists
     if(searchMutQ(mutex) != 0){
