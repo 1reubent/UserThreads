@@ -1,9 +1,14 @@
 How to run the benchmark?
 -------------------------
+First make sure that the thread library in the parent directory is already compiled. 
+To do that first `cd` into `UserThreads/code`. Then `make` and `make clean`:
+```
+	$ cd UserThreads/code
+	$ make clean
+	$ make
+```
 
-Make sure that the thread library in the parent directory is already compiled. Check the project description to see instructions on how to do that.
-
-1. First, do a make clean and make
+1. Then, do a make clean and make
 ```
 	$ make clean
 	$ make
